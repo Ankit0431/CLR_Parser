@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 def parse_grammar(input_strings):
     """
     Parse grammar strings into a list of (LHS, RHS) tuples.
@@ -12,7 +10,7 @@ def parse_grammar(input_strings):
     productions = []
     for s in input_strings:
         lhs, rhs_str = s.split(" -> ")
-        rhs = rhs_str.split()  # Split RHS into a list of symbols
+        rhs = list(rhs_str)  # Split RHS into individual symbols
         productions.append((lhs, rhs))
     return productions
 
@@ -68,19 +66,48 @@ def compute_first(productions, non_terminals, terminals, nullable):
         dict: Mapping of symbols to their FIRST sets.
     """
     first = {symbol: set() for symbol in non_terminals.union(terminals)}
+    # Initialize FIRST for terminals
     for t in terminals:
         first[t].add(t)
     changed = True
     while changed:
         changed = False
         for lhs, rhs in productions:
+            if not rhs:
+                continue
             for symbol in rhs:
-                first[lhs].update(first[symbol] - {""})
-                if symbol not in nullable:
+                if symbol in terminals:
+                    if symbol not in first[lhs]:
+                        first[lhs].add(symbol)
+                        changed = True
                     break
-            if all(s in nullable for s in rhs):
-                first[lhs].add("")
+                elif symbol in non_terminals:
+                    for t in first[symbol]:
+                        if t not in first[lhs]:
+                            first[lhs].add(t)
+                            changed = True
+                    if not nullable[symbol]:
+                        break
     return first
+
+def first_of_sequence(sequence, lookahead, first, nullable, terminals, non_terminals):
+    """
+    Compute FIRST(βa) for a sequence β followed by lookahead a.
+    
+    Returns:
+        set: FIRST set of the sequence with lookahead.
+    """
+    result = set()
+    for symbol in sequence:
+        if symbol in terminals:
+            result.add(symbol)
+            return result
+        elif symbol in non_terminals:
+            result.update(first[symbol])
+            if not nullable[symbol]:
+                return result
+    result.add(lookahead)  # All symbols in sequence are nullable
+    return result
 
 def closure(items, productions, first, nullable, terminals, non_terminals):
     """
@@ -113,21 +140,6 @@ def closure(items, productions, first, nullable, terminals, non_terminals):
                                     changed = True
         I.update(new_items)
     return I
-
-def first_of_sequence(sequence, lookahead, first, nullable, terminals, non_terminals):
-    """
-    Compute FIRST(βa) for a sequence β followed by lookahead a.
-    
-    Returns:
-        set: FIRST set of the sequence with lookahead.
-    """
-    result = set()
-    for symbol in sequence:
-        result.update(first[symbol] - {""})
-        if symbol not in nullable:
-            return result
-    result.add(lookahead)
-    return result
 
 def goto(items, symbol, productions, first, nullable, terminals, non_terminals):
     """
@@ -230,7 +242,7 @@ def compute_clr_parser(input_grammar):
 
 # Example usage
 if __name__ == "__main__":
-    grammar = ["S -> C C", "C -> c C", "C -> d"]
+    grammar = ["S -> CC", "C -> cC", "C -> d"]
     action, goto, states = compute_clr_parser(grammar)
     
     print("States:")
