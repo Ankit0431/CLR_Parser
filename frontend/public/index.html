@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Web site created using create-react-app"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <title>CLR Praser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'black': '#000000', // Pure black for background
+              'soft-gray': '#d1d5db', // Light gray for text
+              'dark-gray': '#374151', // Darker gray for containers
+              'soft-blue': '#60a5fa', // Soft blue for accents (button, focus ring)
+              'error-red': '#ef4444', // Red for errors
+            },
+            dropShadow: {
+              'soft': '0 0 4px rgba(255, 255, 255, 0.1)', // Subtle white glow
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    
+  </body>
+</html>
