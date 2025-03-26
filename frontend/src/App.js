@@ -152,7 +152,7 @@ function App() {
     <div className="min-h-screen w-full bg-black text-soft-gray p-5 flex justify-center">
       <div className="w-full max-w-2xl">
         <h2 className="text-3xl font-extrabold text-center mb-6 text-soft-gray drop-shadow-soft">
-          CLR Parser
+          CLR(1) Parser
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <textarea

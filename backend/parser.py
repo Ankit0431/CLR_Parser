@@ -1,54 +1,26 @@
 from collections import defaultdict
 
 def parse_grammar(input_strings):
-    """
-    Parse grammar strings into a list of (LHS, RHS) tuples.
-    
-    Args:
-        input_strings (list): List of grammar rules as strings, e.g., ["S -> CC", "C -> cC"].
-    Returns:
-        list: List of tuples, e.g., [("S", ["C", "C"]), ("C", ["c", "C"])].
-    """
     productions = []
     for s in input_strings:
         lhs, rhs_str = s.split(" -> ")
-        rhs = rhs_str.split()  # Split RHS into a list of symbols
+        rhs = rhs_str.split()
         productions.append((lhs, rhs))
     return productions
 
 def augment_grammar(productions):
-    """
-    Augment the grammar by adding S' -> S, where S is the original start symbol.
-    
-    Args:
-        productions (list): List of (LHS, RHS) tuples.
-    Returns:
-        list: Augmented list of productions.
-    """
     start_symbol = productions[0][0]
     augmented = [("S'", [start_symbol])] + productions
     return augmented
 
 def get_symbols(productions):
-    """
-    Identify non-terminals and terminals in the grammar.
-    
-    Returns:
-        set, set: Non-terminals and terminals.
-    """
     non_terminals = set(lhs for lhs, rhs in productions)
     all_symbols = set(symbol for lhs, rhs in productions for symbol in rhs)
     terminals = all_symbols - non_terminals
-    terminals.add("$")  # Add end-of-input marker
+    terminals.add("$")
     return non_terminals, terminals
 
 def compute_nullable(productions, non_terminals):
-    """
-    Compute which non-terminals are nullable (can derive the empty string).
-    
-    Returns:
-        dict: Mapping of non-terminals to True/False indicating nullability.
-    """
     nullable = {nt: False for nt in non_terminals}
     changed = True
     while changed:
@@ -61,12 +33,6 @@ def compute_nullable(productions, non_terminals):
     return nullable
 
 def compute_first(productions, non_terminals, terminals, nullable):
-    """
-    Compute FIRST sets for all symbols.
-    
-    Returns:
-        dict: Mapping of symbols to their FIRST sets.
-    """
     first = {symbol: set() for symbol in non_terminals.union(terminals)}
     for t in terminals:
         first[t].add(t)
@@ -83,14 +49,6 @@ def compute_first(productions, non_terminals, terminals, nullable):
     return first
 
 def closure(items, productions, first, nullable, terminals, non_terminals):
-    """
-    Compute the closure of a set of LR(1) items.
-    
-    Args:
-        items (set): Set of (prod_index, dot_position, lookahead) tuples.
-    Returns:
-        set: Closed set of LR(1) items.
-    """
     I = set(items)
     changed = True
     while changed:
@@ -115,12 +73,6 @@ def closure(items, productions, first, nullable, terminals, non_terminals):
     return I
 
 def first_of_sequence(sequence, lookahead, first, nullable, terminals, non_terminals):
-    """
-    Compute FIRST(βa) for a sequence β followed by lookahead a.
-    
-    Returns:
-        set: FIRST set of the sequence with lookahead.
-    """
     result = set()
     for symbol in sequence:
         result.update(first[symbol] - {""})
@@ -130,12 +82,6 @@ def first_of_sequence(sequence, lookahead, first, nullable, terminals, non_termi
     return result
 
 def goto(items, symbol, productions, first, nullable, terminals, non_terminals):
-    """
-    Compute the Goto set for a set of items and a symbol X.
-    
-    Returns:
-        set: Set of LR(1) items after moving the dot past the symbol.
-    """
     J = set()
     for prod_index, dot_position, lookahead in items:
         prod = productions[prod_index]
@@ -146,17 +92,11 @@ def goto(items, symbol, productions, first, nullable, terminals, non_terminals):
     return closure(J, productions, first, nullable, terminals, non_terminals)
 
 def build_dfa(productions, first, nullable, terminals, non_terminals):
-    """
-    Build the collection of LR(1) sets of items (DFA states).
-    
-    Returns:
-        list, dict: List of states and transitions dictionary.
-    """
-    initial_item = (0, 0, "$")  # [S' -> .S, $]
+    initial_item = (0, 0, "$")
     I0 = closure({initial_item}, productions, first, nullable, terminals, non_terminals)
     states = [I0]
     state_dict = {frozenset(I0): 0}
-    transitions = {}  # (state_index, symbol) -> next_state_index
+    transitions = {}
     to_process = [0]
     
     while to_process:
@@ -177,32 +117,23 @@ def build_dfa(productions, first, nullable, terminals, non_terminals):
     return states, transitions
 
 def build_parsing_table(states, transitions, productions, terminals, non_terminals):
-    """
-    Construct the ACTION and GOTO tables.
-    
-    Returns:
-        dict, dict: ACTION and GOTO tables.
-    """
-    action = {}  # (state, terminal) -> ("shift", state) | ("reduce", prod_index) | "accept"
-    goto = {}    # (state, non_terminal) -> state
+    action = {}
+    goto = {}
     
     for i, state in enumerate(states):
-        # Shift actions
         for t in terminals:
             if (i, t) in transitions:
                 action[(i, t)] = ("shift", transitions[(i, t)])
         
-        # Reduce and accept actions
         for prod_index, dot_position, lookahead in state:
             prod = productions[prod_index]
             rhs = prod[1]
             if dot_position == len(rhs):
-                if prod_index == 0 and lookahead == "$":  # [S' -> S., $]
-                    action[(i, "$")] = "accept"
+                if prod_index == 0:
+                    action[(i, "$")] = ("accept", None)
                 else:
                     action[(i, lookahead)] = ("reduce", prod_index)
         
-        # Goto transitions
         for nt in non_terminals:
             if (i, nt) in transitions:
                 goto[(i, nt)] = transitions[(i, nt)]
@@ -210,15 +141,6 @@ def build_parsing_table(states, transitions, productions, terminals, non_termina
     return action, goto
 
 def compute_clr_parser(input_grammar):
-    """
-    Main function to compute CLR parsing tables from a list of grammar strings.
-    
-    Args:
-        input_grammar (list): List of grammar strings, e.g., ["S -> CC", "C -> cC", "C -> d"].
-    Returns:
-        dict, dict, list: ACTION table, GOTO table, and list of DFA states.
-    """
-    # Parse the input grammar strings
     productions = parse_grammar(input_grammar)
     productions = augment_grammar(productions)
     non_terminals, terminals = get_symbols(productions)
@@ -226,19 +148,104 @@ def compute_clr_parser(input_grammar):
     first = compute_first(productions, non_terminals, terminals, nullable)
     states, transitions = build_dfa(productions, first, nullable, terminals, non_terminals)
     action, goto = build_parsing_table(states, transitions, productions, terminals, non_terminals)
-    return action, goto, states
+    return action, goto, productions, states
 
-# Example usage
+def parse_input(action, goto, productions, input_string):
+    input_tokens = input_string.split() + ["$"]
+    stack = [0]
+    steps = []
+    index = 0
+    
+    while True:
+        state = stack[-1]
+        token = input_tokens[index]
+        step = {"Step": len(steps) + 1, "Stack": " ".join(map(str, stack)), "Input": " ".join(input_tokens[index:])}
+        
+        if (state, token) not in action:
+            step["Action"] = "Error: No action for state {0} and token {1}".format(state, token)
+            steps.append(step)
+            break
+        
+        action_type, value = action[(state, token)]
+        
+        if action_type == "shift":
+            step["Action"] = "Shift"
+            stack.append(value)
+            index += 1
+        elif action_type == "reduce":
+            prod_index = value
+            lhs, rhs = productions[prod_index]
+            step["Action"] = "Reduce ({0} -> {1})".format(lhs, " ".join(rhs))
+            for _ in range(len(rhs)):
+                stack.pop()
+            current_state = stack[-1]
+            stack.append(goto[(current_state, lhs)])
+        elif action_type == "accept":
+            step["Action"] = "Accept"
+            steps.append(step)
+            break
+        
+        steps.append(step)
+    
+    return steps
+
+def print_states_table(states, productions):
+    print("\nCLR(1) States:")
+    print("| State | Items                                      |")
+    print("|-------|--------------------------------------------|")
+    for i, state in enumerate(states):
+        items_str = ", ".join(["[{0} -> {1}, {2}]".format(
+            productions[p][0],
+            " ".join(productions[p][1][:d] + ["."] + productions[p][1][d:] if d < len(productions[p][1]) else productions[p][1] + ["."]),
+            l
+        ) for p, d, l in state])
+        print("| I{0:<4} | {1:<42} |".format(i, items_str))
+
+def print_parsing_table(action, goto, terminals, non_terminals):
+    print("\nCLR(1) Parsing Table:")
+    header = "| State | " + " | ".join(["Action: {0:<2}".format(t) for t in sorted(terminals)]) + " | " + " | ".join(["Goto: {0:<2}".format(nt) for nt in sorted(non_terminals)]) + " |"
+    print(header)
+    print("|-------|" + "---|" * (len(terminals) + len(non_terminals)) + "|")
+    states_count = max(max(action.keys(), default=(-1, ""))[0], max(goto.keys(), default=(-1, ""))[0]) + 1
+    for i in range(states_count):
+        row = "| {0:<5} | ".format(i)
+        for t in sorted(terminals):
+            if (i, t) in action:
+                act, val = action[(i, t)]
+                if act == "shift":
+                    row += "S{0:<5} | ".format(val)
+                elif act == "reduce":
+                    row += "R{0:<5} | ".format(val)
+                elif act == "accept":
+                    row += "Accept | "
+                else:
+                    row += "      | "
+            else:
+                row += "      | "
+        for nt in sorted(non_terminals):
+            if (i, nt) in goto:
+                row += "{0:<5} | ".format(goto[(i, nt)])
+            else:
+                row += "      | "
+        print(row)
+
+def print_parse_table(steps):
+    print("\nParsing Steps:")
+    print("| Step | Stack       | Input   | Action            |")
+    print("|------|-------------|---------|-------------------|")
+    for step in steps:
+        print("| {0:<4} | {1:<11} | {2:<7} | {3:<17} |".format(step["Step"], step["Stack"], step["Input"], step["Action"]))
+
 if __name__ == "__main__":
     grammar = ["S -> C C", "C -> c C", "C -> d"]
-    action, goto, states = compute_clr_parser(grammar)
+    productions = augment_grammar(parse_grammar(grammar))
+    action, goto, productions, states = compute_clr_parser(grammar)
     
-    print("States:")
-    for i, state in enumerate(states):
-        print(f"I{i}: {state}")
-    print("\nACTION table:")
-    for key, value in action.items():
-        print(f"ACTION[{key[0]}, {key[1]}] = {value}")
-    print("\nGOTO table:")
-    for key, value in goto.items():
-        print(f"GOTO[{key[0]}, {key[1]}] = {value}")
+    print_states_table(states, productions)
+    non_terminals, terminals = get_symbols(productions)
+    print_parsing_table(action, goto, terminals, non_terminals)
+    
+    input_string = "c d d"
+    steps = parse_input(action, goto, productions, input_string)
+    print("\nParsing '{0}':".format(input_string))
+    print_parse_table(steps)
