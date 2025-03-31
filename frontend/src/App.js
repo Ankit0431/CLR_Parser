@@ -187,7 +187,7 @@ function App() {
     setError(null);
     setResult(null);
     try {
-      const response = await axios.post("http://127.0.0.1:5000/parse", {
+      const response = await axios.post("https://clr-parser.onrender.com/parse", {
         grammar,
       });
       setResult(response.data);
