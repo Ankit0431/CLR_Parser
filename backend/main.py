@@ -85,7 +85,8 @@ def build_dfa(productions, first, non_terminals):
     while to_process:
         current = to_process.pop(0)
         current_state = states[current]
-        for symbol in non_terminals.union({t for _, rhs in productions for t in rhs}):
+        symbols = non_terminals.union({t for _, rhs in productions for t in rhs})
+        for symbol in symbols:
             next_state = goto(current_state, symbol, productions, first, non_terminals)
             if next_state:
                 fs = frozenset(next_state)
@@ -100,43 +101,62 @@ def build_dfa(productions, first, non_terminals):
     return states, transitions
 
 def build_parsing_table(states, transitions, productions, non_terminals):
-    action = {}
+    action = defaultdict(list)  # Changed to list to store multiple actions
     goto = {}
-    terminals = {t for _, rhs in productions for t in rhs}.union({"$"})
+    terminals = {t for _, rhs in productions for t in rhs if t not in non_terminals}.union({"$"})
+    
     for i, state in enumerate(states):
+        # Process shifts first
         for t in terminals:
             if (i, t) in transitions:
-                action[(i, t)] = ("shift", transitions[(i, t)])
+                action[(i, t)].append(("shift", transitions[(i, t)]))
+        
+        # Process reduces and accept
         for prod_index, dot_pos, lookahead in state:
             lhs, rhs = productions[prod_index]
             if dot_pos == len(rhs):
                 if prod_index == 0 and lookahead == "$":
-                    action[(i, "$" )] = "accept"
+                    action[(i, "$")].append("accept")
                 else:
-                    action[(i, lookahead)] = ("reduce", prod_index)
+                    action[(i, lookahead)].append(("reduce", prod_index))
+        
+        # Process goto transitions
         for nt in non_terminals:
             if (i, nt) in transitions:
                 goto[(i, nt)] = transitions[(i, nt)]
+    
     return action, goto
+
+def format_production(prod_index, dot_pos, productions):
+    lhs, rhs = productions[prod_index]
+    rhs_with_dot = rhs[:dot_pos] + ['.'] + rhs[dot_pos:]
+    return f"{lhs} -> {' '.join(rhs_with_dot)}"
 
 def compute_clr_parser(input_grammar):
     productions = parse_grammar(input_grammar)
     productions = augment_grammar(productions)
     non_terminals = {lhs for lhs, _ in productions}
-    first = compute_first(productions, non_terminals, {t for _, rhs in productions for t in rhs})
+    terminals = {t for _, rhs in productions for t in rhs if t not in non_terminals}
+    first = compute_first(productions, non_terminals, terminals)
     states, transitions = build_dfa(productions, first, non_terminals)
     action, goto = build_parsing_table(states, transitions, productions, non_terminals)
-    return action, goto, states
+    return action, goto, states, productions, terminals
 
-def make_json_serializable(obj):
+def make_json_serializable(obj, productions=None):
     if isinstance(obj, set):
-        return list(obj)
+        if productions and all(isinstance(item, tuple) and len(item) == 3 for item in obj):
+            # Format states with productions
+            return [{
+                'production': format_production(item[0], item[1], productions),
+                'lookahead': item[2]
+            } for item in sorted(obj)]
+        return sorted(list(obj))
     elif isinstance(obj, dict):
-        return {str(k): make_json_serializable(v) for k, v in obj.items()}
+        return {str(k): make_json_serializable(v, productions) for k, v in obj.items()}
     elif isinstance(obj, list):
-        return [make_json_serializable(item) for item in obj]
+        return [make_json_serializable(item, productions) for item in obj]
     elif isinstance(obj, tuple):
-        return [make_json_serializable(item) for item in obj]
+        return [make_json_serializable(item, productions) for item in obj]
     return obj
 
 @app.route('/parse', methods=['POST'])
@@ -147,11 +167,21 @@ def parse_grammar_route():
         if not grammar or all(not rule.strip() for rule in grammar):
             return jsonify({'error': 'No grammar rules provided'}), 400
         grammar = [rule.strip() for rule in grammar if rule.strip()]
-        action, goto, states = compute_clr_parser(grammar)
+        
+        action, goto, states, productions, terminals = compute_clr_parser(grammar)
+        
+        # Format action table for all terminals in same row
+        formatted_action = {}
+        for (state, symbol), actions in action.items():
+            if str(state) not in formatted_action:
+                formatted_action[str(state)] = {t: [] for t in terminals.union({"$"})}
+            formatted_action[str(state)][symbol] = actions
+        
         response = {
-            'action': make_json_serializable(action),
+            'action': make_json_serializable(formatted_action),
             'goto': make_json_serializable(goto),
-            'states': make_json_serializable(states)
+            'states': make_json_serializable(states, productions),
+            'productions': [f"{lhs} -> {' '.join(rhs)}" for lhs, rhs in productions]
         }
         return jsonify(response)
     except Exception as e:

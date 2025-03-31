@@ -67,9 +67,9 @@ const StateDisplay = ({ states }) => {
         <div key={index} className="mb-4">
           <strong className="text-lg text-soft-gray">State {index}:</strong>
           <ul className="list-none pl-5">
-            {state.map(([prodIndex, dotPos, lookahead]) => (
-              <li key={`${prodIndex}-${dotPos}-${lookahead}`} className="text-sm text-soft-gray">
-                [Production {prodIndex}, Dot: {dotPos}, Lookahead: {lookahead}]
+            {state.map((item, idx) => (
+              <li key={idx} className="text-sm text-soft-gray">
+                {item.production} [Lookahead: {item.lookahead}]
               </li>
             ))}
           </ul>
@@ -81,24 +81,44 @@ const StateDisplay = ({ states }) => {
 
 // Helper component to display action table
 const ActionTable = ({ action }) => {
-  const entries = Object.entries(action);
+  // Get all unique terminals
+  const terminals = [
+    ...new Set(
+      Object.values(action).flatMap((state) => Object.keys(state))
+    ),
+  ].sort();
+
   return (
     <table className="w-full border-collapse mt-2">
       <thead>
         <tr className="bg-dark-gray">
           <th className="border border-dark-gray p-2 text-soft-gray">State</th>
-          <th className="border border-dark-gray p-2 text-soft-gray">Terminal</th>
-          <th className="border border-dark-gray p-2 text-soft-gray">Action</th>
+          {terminals.map((terminal) => (
+            <th key={terminal} className="border border-dark-gray p-2 text-soft-gray">
+              {terminal}
+            </th>
+          ))}
         </tr>
       </thead>
       <tbody>
-        {entries.map(([[state, terminal], value], index) => (
-          <tr key={index} className="hover:bg-dark-gray hover:bg-opacity-50 transition-colors">
+        {Object.entries(action).map(([state, terminalsObj]) => (
+          <tr
+            key={state}
+            className="hover:bg-dark-gray hover:bg-opacity-50 transition-colors"
+          >
             <td className="border border-dark-gray p-2 text-soft-gray">{state}</td>
-            <td className="border border-dark-gray p-2 text-soft-gray">{terminal}</td>
-            <td className="border border-dark-gray p-2 text-soft-gray">
-              {Array.isArray(value) ? `${value[0]} ${value[1]}` : value}
-            </td>
+            {terminals.map((terminal) => (
+              <td
+                key={terminal}
+                className="border border-dark-gray p-2 text-soft-gray"
+              >
+                {terminalsObj[terminal]?.length > 0
+                  ? terminalsObj[terminal].map((act, idx) =>
+                    act === "accept" ? "acc" : `${act[0][0]}${act[1]}`
+                  ).join(", ")
+                  : ""}
+              </td>
+            ))}
           </tr>
         ))}
       </tbody>
@@ -108,22 +128,48 @@ const ActionTable = ({ action }) => {
 
 // Helper component to display goto table
 const GotoTable = ({ goto }) => {
-  const entries = Object.entries(goto);
+  // Parse goto keys and group by state
+  const states = {};
+  const nonTerminals = new Set();
+
+  Object.entries(goto).forEach(([key, nextState]) => {
+    const [state, nt] = key.split(", ");
+    const stateNum = state.slice(1); // Remove '('
+    const nonTerminal = nt.slice(1, -1); // Remove quotes and ')'
+    if (!states[stateNum]) states[stateNum] = {};
+    states[stateNum][nonTerminal] = nextState;
+    nonTerminals.add(nonTerminal);
+  });
+
+  const sortedNonTerminals = Array.from(nonTerminals).sort();
+
   return (
     <table className="w-full border-collapse mt-2">
       <thead>
         <tr className="bg-dark-gray">
           <th className="border border-dark-gray p-2 text-soft-gray">State</th>
-          <th className="border border-dark-gray p-2 text-soft-gray">Non-Terminal</th>
-          <th className="border border-dark-gray p-2 text-soft-gray">Next State</th>
+          {sortedNonTerminals.map((nt) => (
+            <th key={nt} className="border border-dark-gray p-2 text-soft-gray">
+              {nt}
+            </th>
+          ))}
         </tr>
       </thead>
       <tbody>
-        {entries.map(([[state, nonTerminal], nextState], index) => (
-          <tr key={index} className="hover:bg-dark-gray hover:bg-opacity-50 transition-colors">
+        {Object.entries(states).map(([state, transitions]) => (
+          <tr
+            key={state}
+            className="hover:bg-dark-gray hover:bg-opacity-50 transition-colors"
+          >
             <td className="border border-dark-gray p-2 text-soft-gray">{state}</td>
-            <td className="border border-dark-gray p-2 text-soft-gray">{nonTerminal}</td>
-            <td className="border border-dark-gray p-2 text-soft-gray">{nextState}</td>
+            {sortedNonTerminals.map((nt) => (
+              <td
+                key={nt}
+                className="border border-dark-gray p-2 text-soft-gray"
+              >
+                {transitions[nt] || ""}
+              </td>
+            ))}
           </tr>
         ))}
       </tbody>
@@ -141,7 +187,9 @@ function App() {
     setError(null);
     setResult(null);
     try {
-      const response = await axios.post("http://127.0.0.1:5000/parse", { grammar });
+      const response = await axios.post("http://127.0.0.1:5000/parse", {
+        grammar,
+      });
       setResult(response.data);
     } catch (err) {
       setError(err.response?.data?.error || "Error connecting to the parser server.");
@@ -176,7 +224,9 @@ F -> id`}
           </button>
         </form>
         {error && (
-          <p className="mt-4 text-error-red font-semibold text-center drop-shadow-soft">{error}</p>
+          <p className="mt-4 text-error-red font-semibold text-center drop-shadow-soft">
+            {error}
+          </p>
         )}
         {result && !result.error && (
           <div className="mt-6 space-y-6">
@@ -188,11 +238,15 @@ F -> id`}
               <StateDisplay states={result.states} />
             </div>
             <div className="bg-black p-4 rounded-md border border-dark-gray">
-              <h4 className="text-lg font-medium mb-2 text-soft-gray">Action Table:</h4>
+              <h4 className="text-lg font-medium mb-2 text-soft-gray">
+                Action Table:
+              </h4>
               <ActionTable action={result.action} />
             </div>
             <div className="bg-black p-4 rounded-md border border-dark-gray">
-              <h4 className="text-lg font-medium mb-2 text-soft-gray">Goto Table:</h4>
+              <h4 className="text-lg font-medium mb-2 text-soft-gray">
+                Goto Table:
+              </h4>
               <GotoTable goto={result.goto} />
             </div>
           </div>
