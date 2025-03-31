@@ -3,7 +3,7 @@ from collections import defaultdict
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "https://clr-parser-seven.vercel.app/"}})
+CORS(app, resources={r"/*": {"origins": "https://clr-parser-seven.vercel.app/", "allow_headers": "*"}})
 
 def parse_grammar(input_strings):
     productions = []
